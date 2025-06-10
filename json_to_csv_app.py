@@ -3,6 +3,8 @@ import pandas as pd
 import json
 from io import StringIO
 import time
+import tempfile
+import os
 
 def flatten_json(data, parent_key='', sep='_'):
     """
@@ -79,16 +81,34 @@ def json_to_csv(json_data, flatten_nested=True, normalize_data=True):
         st.error(f"Error converting JSON to CSV: {str(e)}")
         return None
 
-def get_csv_download_link(df, filename="converted_data.csv"):
+def create_download_link(df, filename="converted_data.csv"):
     """
-    Generate CSV data for download
+    Create a more reliable download mechanism
     """
     try:
-        csv = df.to_csv(index=False)
-        return csv
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_data = csv_buffer.getvalue()
+        
+        # Create a simple HTML download link
+        import base64
+        b64 = base64.b64encode(csv_data.encode()).decode()
+        
+        download_link = f'''
+        <div style="margin: 10px 0;">
+            <a href="data:text/csv;base64,{b64}" 
+               download="{filename}"
+               style="background-color: #4CAF50; color: white; padding: 10px 20px; 
+                      text-decoration: none; border-radius: 5px; display: inline-block;">
+                💾 Download CSV File
+            </a>
+        </div>
+        '''
+        
+        return download_link, csv_data
     except Exception as e:
-        st.error(f"Error generating CSV: {str(e)}")
-        return None
+        st.error(f"Error creating download link: {str(e)}")
+        return None, None
 
 def main():
     st.set_page_config(
@@ -203,10 +223,10 @@ def main():
                 )
                 
                 # Show CSV preview (limited for performance)
-                with st.expander("📄 CSV Preview"):
-                    preview_data = csv_data[:2000] if csv_data else ""
-                    if len(preview_data) >= 2000:
-                        preview_data += "\n... (truncated)"
+                with st.expander("🔍 CSV Preview"):
+                    preview_data = csv_data[:2000] if len(csv_data) > 2000 else csv_data
+                    if len(csv_data) > 2000:
+                        preview_data += "\n... (truncated for display)"
                     st.code(preview_data, language="csv")
                 
                 # Show conversion info
