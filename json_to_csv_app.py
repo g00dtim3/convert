@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 from io import StringIO
-import base64
+import time
 
 def flatten_json(data, parent_key='', sep='_'):
     """
@@ -79,14 +79,16 @@ def json_to_csv(json_data, flatten_nested=True, normalize_data=True):
         st.error(f"Error converting JSON to CSV: {str(e)}")
         return None
 
-def download_csv(df, filename="converted_data.csv"):
+def get_csv_download_link(df, filename="converted_data.csv"):
     """
-    Create download link for CSV data
+    Generate CSV data for download
     """
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download CSV File</a>'
-    return href
+    try:
+        csv = df.to_csv(index=False)
+        return csv
+    except Exception as e:
+        st.error(f"Error generating CSV: {str(e)}")
+        return None
 
 def main():
     st.set_page_config(
@@ -164,15 +166,25 @@ def main():
                     }
                 ]
             }
-            json_input = json.dumps(example_data, indent=2)
-            st.rerun()
+            st.session_state.json_input = json.dumps(example_data, indent=2)
+        
+        # Use session state for json_input to prevent rerun issues
+        if 'json_input' not in st.session_state:
+            st.session_state.json_input = json_input
+        
+        if st.session_state.json_input != json_input:
+            st.session_state.json_input = json_input
     
     with col2:
         st.header("📤 CSV Output")
         
-        if json_input:
-            # Convert JSON to CSV
-            df = json_to_csv(json_input, flatten_nested, normalize_data)
+        if st.session_state.json_input or json_input:
+            current_json = st.session_state.json_input or json_input
+            
+            # Add a progress indicator for large files
+            with st.spinner("Converting JSON to CSV..."):
+                # Convert JSON to CSV
+                df = json_to_csv(current_json, flatten_nested, normalize_data)
             
             if df is not None:
                 st.success(f"✅ Conversion successful! ({len(df)} rows, {len(df.columns)} columns)")
@@ -190,9 +202,12 @@ def main():
                     use_container_width=True
                 )
                 
-                # Show CSV preview
+                # Show CSV preview (limited for performance)
                 with st.expander("📄 CSV Preview"):
-                    st.text(csv_data[:1000] + "..." if len(csv_data) > 1000 else csv_data)
+                    preview_data = csv_data[:2000] if csv_data else ""
+                    if len(preview_data) >= 2000:
+                        preview_data += "\n... (truncated)"
+                    st.code(preview_data, language="csv")
                 
                 # Show conversion info
                 with st.expander("ℹ️ Conversion Info"):
